@@ -133,6 +133,21 @@ class PiplineJobBuilder extends JobBuilder {
         }
     }
 
+    // Since JobDSL version 1.70 the authenticationToken value is WRONGLY marked as deprecated.
+    // https://github.com/jenkinsci/job-dsl-plugin/wiki/Migration#migrating-to-170
+    // Furthermore it is not only marked as deprecated, the current implementation just ignores
+    // the value.
+    // It will be reconfigurable in the next release, please see the corresponding discussion:
+    // https://issues.jenkins-ci.org/browse/JENKINS-31832
+    // Until then, we use the configure block to replicate to provice the functionality.
+    // If JobDSL version 1.71 is out (and contains the fix) this block can simply be removed and
+    // the 'upstream-implemenation' will be used as they have the signature.
+    void authenticationToken(def token) {
+        configure { Node project ->
+            project / authToken(token)
+        }
+    }
+
     void importJenkinsfileFromWS(String jenkinsfilePath) {
         job.definition {
             cps {
