@@ -1,6 +1,6 @@
-def catroid = new JobsBuilder(this).android({new CatroidData()}).folderAndView('Catroid-Legacy')
+def catroid = new JobsBuilder(this).pipeline({new CatroidData()}).folderAndView('Catroid-Legacy')
 def catroidorg = new JobsBuilder(this).gitHubOrganization({new CatroidData()})
-def catroidroot = new JobsBuilder(this).android({new CatroidData()})
+def catroidroot = new JobsBuilder(this).pipeline({new CatroidData()})
 
 catroidorg.job("Catroid") {
     htmlDescription(['Job is automatically started on a new commit or a new/updated pull request created on github.',
@@ -17,48 +17,46 @@ catroidorg.job("Catroid") {
 
 Views.basic(this, "Catroid", "Catroid/.+")
 
-catroid.job("SingleClassEmulatorTest") {
-    htmlDescription(['This job runs the tests of the given REPO/BRANCH and CLASS.',
+catroid.job("ManualEmulatorTest") {
+    htmlDescription(['This job runs the tests of the given REPO/BRANCH and CLASS/PACKAGE.',
                      'Use it when you want to build your own branch on Jenkins and run tests on the emulator.',
                      'Using that job early in developement can improve your tests, ' +
                      'so that they not only work on your local device but also on the emulator.'])
 
     jenkinsUsersPermissions(Permission.JobBuild, Permission.JobRead, Permission.JobCancel)
 
-    parameterizedGit()
+    parameterizedGit(jenkinsfile: 'Jenkinsfile.ManualTests')
     job.parameters {
-        stringParam('CLASS', 'test.common.DefaultProjectHandlerTest', '')
+        stringParam {
+            name('CLASS_PKG_TO_TEST')
+            defaultValue('test.common.DefaultProjectHandlerTest')
+            description('')
+            trim(true)
+        }
+        textParam {
+            name('EMUALTOR_CONFIG')
+            defaultValue("""# AVD creation
+system_image=system-images;android-24;default;x86_64
+## properties written to the avd config, prefix here with prop, so the script knows where to use them
+prop.hw.camera=yes
+prop.hw.ramSize=2048
+prop.hw.gpu.enabled=yes
+prop.hw.camera.front=emulated
+prop.hw.camera.back=emulated
+prop.hw.gps=yes
+prop.hw.mainKeys=no
+prop.hw.keyboard=yes
+prop.disk.dataPartition.size=512M
+## dpi
+screen.density=xxhdpi
+## sdcard
+sdcard.size=200M
+## AVD startup
+screen.resolution=1080x1920
+device.language=en_US""")
+            description('Keep in sync with buildScripts/emulator_config.ini')
+        }
     }
-    parameterizedAndroidVersion()
-    buildName('#${BUILD_NUMBER} | ${ENV, var="CLASS"} ')
-    androidEmulator()
-    gradle('adbDisableAnimationsGlobally connectedCatroidDebugAndroidTest',
-           '-Pandroid.testInstrumentationRunnerArguments.class=org.catrobat.catroid.$CLASS')
-    junit()
-
-    notifications()
-}
-
-catroid.job("SinglePackageEmulatorTest") {
-    htmlDescription(['This job runs the tests of the given REPO/BRANCH and PACKAGE.',
-                     'Use it when you want to build your own branch on Jenkins and run tests on the emulator.',
-                     'Using that job early in developement can improve your tests, ' +
-                     'so that they not only work on your local device but also on the emulator.'])
-
-    jenkinsUsersPermissions(Permission.JobBuild, Permission.JobRead, Permission.JobCancel)
-
-    parameterizedGit()
-    job.parameters {
-        stringParam('PACKAGE', 'test', '')
-    }
-    parameterizedAndroidVersion()
-    buildName('#${BUILD_NUMBER} | ${ENV, var="PACKAGE"}')
-    androidEmulator()
-    gradle('adbDisableAnimationsGlobally connectedCatroidDebugAndroidTest',
-           '-Pandroid.testInstrumentationRunnerArguments.package=org.catrobat.catroid.$PACKAGE')
-    junit()
-
-    notifications()
 }
 
 catroid.job("PullRequest") {
@@ -67,14 +65,7 @@ catroid.job("PullRequest") {
     jenkinsUsersPermissions(Permission.JobBuild, Permission.JobRead, Permission.JobCancel)
     anonymousUsersPermissions(Permission.JobRead) // allow anonymous users to see the results of PRs to fix their issues
 
-    pullRequest()
-    androidEmulator()
-    gradle('clean check adbDisableAnimationsGlobally test connectedCatroidDebugAndroidTest',
-           '-Pandroid.testInstrumentationRunnerArguments.package=org.catrobat.catroid.test')
-    staticAnalysis()
-    junit()
-
-    notifications()
+    pullRequest(jenkinsfile: 'Jenkinsfile.PullRequest')
 }
 
 catroid.job("PullRequest-Standalone") {
@@ -85,14 +76,8 @@ catroid.job("PullRequest-Standalone") {
 
     jenkinsUsersPermissions(Permission.JobRead, Permission.JobCancel)
     anonymousUsersPermissions(Permission.JobRead) // allow anonymous users to see the results of PRs to fix their issues
-    git()
 
-    pullRequest(context: 'Standalone APK')
-
-    gradle('assembleStandaloneDebug',
-           '-Pdownload="https://pocketcode.org/download/817.catrobat" -Papk_generator_enabled=true -Psuffix="generated821"')
-
-    notifications()
+    pullRequest(context: 'Standalone APK', jenkinsfile: 'Jenkinsfile.PullRequestStandaloneAPK')
 }
 
 catroid.job("PullRequest-UniqueApk") {
@@ -103,12 +88,8 @@ catroid.job("PullRequest-UniqueApk") {
 
     jenkinsUsersPermissions(Permission.JobRead, Permission.JobCancel)
     anonymousUsersPermissions(Permission.JobRead) // allow anonymous users to see the results of PRs to fix their issues
-    git()
 
-    pullRequest(context: 'Unique APK')
-    gradle('assembleCatroidDebug', '-Pindependent="Code Nightly #${BUILD_NUMBER}"')
-
-    notifications()
+    pullRequest(context: 'Unique APK', jenkinsfile: 'Jenkinsfile.PullRequestIndependentAPK')
 }
 
 catroid.job("PullRequest-Espresso") {
@@ -119,13 +100,8 @@ catroid.job("PullRequest-Espresso") {
 
     pullRequest(triggerPhrase: /.*please\W+run\W+espresso\W+tests.*/,
                 onlyTriggerPhrase: true,
-                context: 'Espresso Tests')
-    androidEmulator()
-    gradle('adbDisableAnimationsGlobally connectedCatroidDebugAndroidTest',
-           '-Pandroid.testInstrumentationRunnerArguments.class=org.catrobat.catroid.uiespresso.testsuites.PullRequestTriggerSuite')
-    junit()
-
-    notifications()
+                context: 'Espresso Tests',
+                jenkinsfile: 'Jenkinsfile.PullRequestEspresso')
 }
 
 catroidroot.job("Build-Standalone") {
@@ -134,9 +110,7 @@ catroidroot.job("Build-Standalone") {
     // !! DO NOT give Anonymous-Users read permission, otherwise the upload-token would be spoiled
     jenkinsUsersPermissions(Permission.JobRead)
 
-    label('Standalone')
-
-    parameters {
+    job.parameters {
         stringParam('DOWNLOAD', 'https://share.catrob.at/pocketcode/download/821.catrobat', 'Enter the Project ID you want to build as standalone')
         stringParam('SUFFIX', 'standalone', '')
         password {
@@ -154,58 +128,5 @@ catroidroot.job("Build-Standalone") {
     def token = GLOBAL_STANDALONE_AUTH_TOKEN
 
     authenticationToken(token)
-    buildName('#${DOWNLOAD}')
-    git(branch: 'master')
-
-    failBuildAfterNoActivity('600')
-
-    job.steps {
-        shell {
-            command('''#!/bin/sh
-SLEEP_TIME=5
-RETRIES=5
-
-HTTP_STATUS_OK=200
-HTTP_STATUS_INVALID_FILE_UPLOAD=528
-
-## check if program is downloadable from web
-## If we can't load it, we retry it ${RETRIES} times
-## On a 528 status (invalid upload), we return 200 which
-## should get interpreted as UNSTABLE build
-while true; do
-    HTTP_STATUS=`curl --write-out %{http_code} --silent --output /dev/null "${DOWNLOAD}"`
-
-    if [ ${HTTP_STATUS} -eq ${HTTP_STATUS_OK} ]; then
-        break
-    fi
-
-
-    RETRIES=$((RETRIES-1))
-    if [ ${RETRIES} -eq 0 ]; then
-        if [ ${HTTP_STATUS} -eq ${HTTP_STATUS_INVALID_FILE_UPLOAD} ]; then
-            echo "Uploaded file seems to be invalid, request to '${DOWNLOAD}' returned HTTP Status ${HTTP_STATUS}"
-            exit 200
-        else
-            echo "Could not download '${DOWNLOAD}', giving up!"
-            exit 1
-        fi
-    fi
-
-    echo "Could not retrieve '${DOWNLOAD}' (HTTP Status ${HTTP_STATUS}), sleep for ${SLEEP_TIME}s and retry a maximum of ${RETRIES} times"
-    sleep ${SLEEP_TIME}
-done
-
-./gradlew -Pdownload="${DOWNLOAD}" -Papk_generator_enabled=true -Psuffix="${SUFFIX}" assembleStandaloneDebug
-
-## +x, otherwise we would spoil the upload token
-set +x
-curl -X POST -k -F upload=@./''' + projectData.standaloneApk + ''' "${UPLOAD}"
-''')
-            unstableReturn(200)
-        }
-    }
-
-    archiveArtifacts(projectData.standaloneApk, true)
-
-    notifications(true)
+    git(branch: 'master', jenkinsfile: 'Jenkinsfile.BuildStandalone')
 }
