@@ -133,6 +133,12 @@ class PiplineJobBuilder extends JobBuilder {
         }
     }
 
+    void authenticationToken(def token) {
+        configure { Node project ->
+            project / authToken(token)
+	    }
+	}
+
     void importJenkinsfileFromWS(String jenkinsfilePath) {
         job.definition {
             cps {

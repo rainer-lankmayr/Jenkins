@@ -1,13 +1,13 @@
 // The file should not be named jenkins.groovy as that leads to a warning as there
 // is already a jenkins package.
-def internal = new JobsBuilder(this).folderAndView('Jenkins', {})
+def internal = new JobsBuilder(this)
 
-internal.job("SeedJob") {
+internal.job("lab/Michael_Musenbrock/SeedJob") {
     htmlDescription(['Seed job to create all other jobs.'])
 
     jenkinsUsersPermissions()
     label('master')
-    git(repo: 'https://github.com/Catrobat/Jenkins.git', branch: 'master')
+    git(repo: 'https://github.com/Catrobat/Jenkins.git', branch: 'mm_test')
     continuous()
     concurrentBuild(false)
     nightly('H 23 * * *') // run the job before all other nightlies
@@ -22,6 +22,4 @@ internal.job("SeedJob") {
             unstableOnDeprecation(true)
         }
     }
-
-    notifications()
 }
